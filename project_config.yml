@@ -1,0 +1,25 @@
+dev:
+  catalog_name: mlops_dev
+  schema_name: arxiv
+  volume_name: arxiv_papers
+  arxiv_papers_table: arxiv_papers
+  ai_parsed_docs_table: ai_parsed_docs
+  arxiv_chunks_table: arxiv_chunks
+
+acc:
+  catalog_name: mlops_acc
+  schema_name: arxiv
+  volume_name: arxiv_papers
+  arxiv_papers_table: arxiv_papers
+  ai_parsed_docs_table: ai_parsed_docs
+  arxiv_chunks_table: arxiv_chunks
+
+prd:
+  catalog_name: mlops_prd
+  schema_name: arxiv
+  volume_name: arxiv_papers
+  arxiv_papers_table: arxiv_papers
+  ai_parsed_docs_table: ai_parsed_docs
+  arxiv_chunks_table: arxiv_chunks
+
+
