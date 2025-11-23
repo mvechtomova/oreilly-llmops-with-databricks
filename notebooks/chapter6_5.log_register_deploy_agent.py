@@ -9,9 +9,13 @@ from agent import agent, llm_endpoint
 
 import mlflow
 from mlflow.utils.environment import _mlflow_conda_env
-from mlflow.models.resources import DatabricksServingEndpoint
+from mlflow.models.resources import DatabricksServingEndpoint, DatabricksGenieSpace, DatabricksVectorSearchIndex
 # COMMAND ----------
 # Test the agent
+
+catalog = "mlops_dev"
+schema = "arxiv"
+model_name = "arxiv_agent"
 
 test_request =  {"input": [{"role": "user",
                 "content": "What are recent papers about LLMs and reasoning?"}]}
@@ -29,8 +33,9 @@ for chunk in agent.predict_stream(test_request):
 # Log and register the agent with MLflow
 
 
-resources = [DatabricksServingEndpoint(
-    endpoint_name=llm_endpoint)]
+resources = [DatabricksServingEndpoint(endpoint_name=llm_endpoint),
+             DatabricksGenieSpace(genie_space_id="01f0c3f882e41bb9be96b4ddf295d2a4"),
+             DatabricksVectorSearchIndex(index_name=f"{catalog}.{schema}.arxiv_index")]
 
 code_paths = ["arxiv_curator-0.1.1-py3-none-any.whl"]
 additional_pip_deps = []
@@ -52,9 +57,7 @@ with mlflow.start_run(run_name="arxiv-mcp-agent",
 
 # COMMAND ----------
 # Register the model to Unity Catalog
-catalog = "mlops_dev"
-schema = "arxiv"
-model_name = "arxiv_agent"
+
 
 registered_model = mlflow.register_model(
     model_uri=model_info.model_uri,
