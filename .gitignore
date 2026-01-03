@@ -22,3 +22,8 @@ build/
 pip-wheel-metadata/
 .ruff_cache
 arxiv_papers/*
+
+# Claude Code Tracing
+.claude/settings.local.json
+.claude/mlflow/
+.claude/

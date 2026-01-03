@@ -57,8 +57,11 @@ code_paths = [f"{root_path}/artifacts/.internal/arxiv_curator-0.1.1-py3-none-any
 project_config = ProjectConfig.from_yaml(config_path=config_path, env=args.env)
 
 
-test_request =  {"input": [{"role": "user",
-                "content": "What are recent papers about LLMs and reasoning?"}]}
+test_request = {
+    "input": [
+        {"role": "user", "content": "What are recent papers about LLMs and reasoning?"}
+    ]
+}
 
 
 resources = [DatabricksServingEndpoint(endpoint_name=llm_endpoint)]
@@ -68,10 +71,9 @@ for package in code_paths:
     whl_name = package.split("/")[-1]
     additional_pip_deps.append(f"code/{whl_name}")
 
-tags={"git_sha": args.git_sha, "run_id": args.run_id}
+tags = {"git_sha": args.git_sha, "run_id": args.run_id}
 
-with mlflow.start_run(run_name="arxiv-mcp-agent",
-                      tags=tags) as run:
+with mlflow.start_run(run_name="arxiv-mcp-agent", tags=tags) as run:
     model_info = mlflow.pyfunc.log_model(
         name="agent",
         python_model="agent.py",
@@ -99,5 +101,6 @@ client.set_registered_model_alias(
     version=registered_model.version,
 )
 
-client.update_registered_model(model_name=model_name,
-                            deployment_job_id=args.deployment_job_id)
+client.update_registered_model(
+    model_name=model_name, deployment_job_id=args.deployment_job_id
+)

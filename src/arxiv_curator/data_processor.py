@@ -5,7 +5,7 @@ import time
 
 import arxiv
 from loguru import logger
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import SparkSession
 from pyspark.sql import types as T
 from pyspark.sql.functions import col, concat_ws, current_timestamp, explode, udf
 from pyspark.sql.types import ArrayType, StringType, StructField, StructType
@@ -38,10 +38,14 @@ class DataProcessor:
         self.volume_name = config.volume_name
 
         # Define schema for the extracted chunks
-        self.chunk_schema = ArrayType(StructType([
-            StructField("chunk_id", StringType(), True),
-            StructField("content", StringType(), True)
-        ]))
+        self.chunk_schema = ArrayType(
+            StructType(
+                [
+                    StructField("chunk_id", StringType(), True),
+                    StructField("content", StringType(), True),
+                ]
+            )
+        )
 
         # Register UDFs
         self.extract_chunks_udf = udf(self._extract_chunks, self.chunk_schema)
@@ -72,7 +76,9 @@ class DataProcessor:
             logger.info(f"Found existing arxiv_papers table. Starting from: {start}")
         else:
             start = time.strftime("%Y%m%d%H%M", time.gmtime(time.time() - 24 * 3600 * 3))
-            logger.info(f"No existing arxiv_papers table. Starting from 3 days ago: {start}")
+            logger.info(
+                f"No existing arxiv_papers table. Starting from 3 days ago: {start}"
+            )
 
         return start
 
@@ -103,21 +109,25 @@ class DataProcessor:
                 try:
                     paper.download_pdf(dirpath=self.pdf_dir, filename=f"{paper_id}.pdf")
                     # Collect metadata
-                    records.append({
-                        "paper_id": paper_id,
-                        "title": paper.title,
-                        "authors": [author.name for author in paper.authors],
-                        "summary": paper.summary,
-                        "pdf_url": paper.pdf_url,
-                        "published": int(paper.published.strftime("%Y%m%d%H%M")),
-                        "processed": int(self.end),
-                        "volume_path": f"{self.pdf_dir}/{paper_id}.pdf"
-                    })
+                    records.append(
+                        {
+                            "paper_id": paper_id,
+                            "title": paper.title,
+                            "authors": [author.name for author in paper.authors],
+                            "summary": paper.summary,
+                            "pdf_url": paper.pdf_url,
+                            "published": int(paper.published.strftime("%Y%m%d%H%M")),
+                            "processed": int(self.end),
+                            "volume_path": f"{self.pdf_dir}/{paper_id}.pdf",
+                        }
+                    )
                     break
                 except Exception:
                     time.sleep(1)
                     if attempt == retries - 1:
-                        logger.warning(f"Paper {paper_id} was not successfully processed.")
+                        logger.warning(
+                            f"Paper {paper_id} was not successfully processed."
+                        )
             # Avoid hitting API rate limits
             time.sleep(1)
 
@@ -129,19 +139,22 @@ class DataProcessor:
         logger.info(f"Downloaded {len(records)} papers to {self.pdf_dir}")
 
         # Create DataFrame and save to arxiv_papers table
-        schema = T.StructType([
-            T.StructField("paper_id", T.StringType(), False),
-            T.StructField("title", T.StringType(), True),
-            T.StructField("authors", T.ArrayType(T.StringType()), True),
-            T.StructField("summary", T.StringType(), True),
-            T.StructField("pdf_url", T.StringType(), True),
-            T.StructField("published", T.LongType(), True),
-            T.StructField("processed", T.LongType(), True),
-            T.StructField("volume_path", T.StringType(), True),
-        ])
+        schema = T.StructType(
+            [
+                T.StructField("paper_id", T.StringType(), False),
+                T.StructField("title", T.StringType(), True),
+                T.StructField("authors", T.ArrayType(T.StringType()), True),
+                T.StructField("summary", T.StringType(), True),
+                T.StructField("pdf_url", T.StringType(), True),
+                T.StructField("published", T.LongType(), True),
+                T.StructField("processed", T.LongType(), True),
+                T.StructField("volume_path", T.StringType(), True),
+            ]
+        )
 
-        df = self.spark.createDataFrame(records, schema=schema) \
-            .withColumn("ingest_ts", current_timestamp())
+        df = self.spark.createDataFrame(records, schema=schema).withColumn(
+            "ingest_ts", current_timestamp()
+        )
 
         arxiv_papers_table = self.config.get_full_table_name("arxiv_papers_table")
         df.write.format("delta").mode("append").saveAsTable(arxiv_papers_table)
@@ -178,7 +191,9 @@ class DataProcessor:
             )
         """)
 
-        logger.info(f"Parsed PDFs from {self.pdf_dir} and saved to {ai_parsed_docs_table}")
+        logger.info(
+            f"Parsed PDFs from {self.pdf_dir} and saved to {ai_parsed_docs_table}"
+        )
 
     @staticmethod
     def _extract_chunks(parsed_content_json: str) -> list[tuple[str, str]]:
@@ -249,13 +264,13 @@ class DataProcessor:
 
         # Fix hyphenation across line breaks:
         # "docu-\nments" => "documents"
-        t = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', t)
+        t = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", t)
 
         # Collapse internal newlines into spaces
-        t = re.sub(r'\s*\n\s*', ' ', t)
+        t = re.sub(r"\s*\n\s*", " ", t)
 
         # Collapse repeated whitespace
-        t = re.sub(r'\s+', ' ', t)
+        t = re.sub(r"\s+", " ", t)
 
         return t.strip()
 
@@ -265,20 +280,22 @@ class DataProcessor:
         Reads from ai_parsed_docs table and saves to arxiv_chunks table.
         """
         ai_parsed_docs_table = self.config.get_full_table_name("ai_parsed_docs_table")
-        logger.info(f"Processing parsed documents from {ai_parsed_docs_table} for end date {self.end}")
+        logger.info(
+            f"Processing parsed documents from {ai_parsed_docs_table} for end date {self.end}"
+        )
 
         df = self.spark.table(ai_parsed_docs_table).where(f"processed = {self.end}")
 
         # Create the transformed dataframe
-        chunks_df = (df
-            .withColumn("paper_id", self.extract_paper_id_udf(col("path")))
+        chunks_df = (
+            df.withColumn("paper_id", self.extract_paper_id_udf(col("path")))
             .withColumn("chunks", self.extract_chunks_udf(col("parsed_content")))
             .withColumn("chunk", explode(col("chunks")))
             .select(
                 col("paper_id"),
                 col("chunk.chunk_id").alias("chunk_id"),
                 self.clean_chunk_udf(col("chunk.content")).alias("text"),
-                concat_ws("_", col("paper_id"), col("chunk.chunk_id")).alias("id")
+                concat_ws("_", col("paper_id"), col("chunk.chunk_id")).alias("id"),
             )
         )
 

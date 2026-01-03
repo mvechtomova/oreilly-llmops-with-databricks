@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,13 +28,14 @@ class ProjectConfig:
             ProjectConfig instance
         """
         if env not in ["prd", "acc", "dev"]:
-            raise ValueError(f"Invalid environment: {env}. Expected 'prd', 'acc', or 'dev'")
+            raise ValueError(
+                f"Invalid environment: {env}. Expected 'prd', 'acc', or 'dev'"
+            )
 
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
         config_dict = config_dict[env]
         return cls(**config_dict)
-
 
     def get_full_table_name(self, table_attr: str) -> str:
         """

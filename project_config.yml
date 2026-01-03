@@ -21,5 +21,3 @@ prd:
   arxiv_papers_table: arxiv_papers
   ai_parsed_docs_table: ai_parsed_docs
   arxiv_chunks_table: arxiv_chunks
-
-

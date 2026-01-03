@@ -1,7 +1,7 @@
 resources:
   jobs:
     register_agent:
-      name: arxiv-agent-register-pipeline 
+      name: arxiv-agent-register-pipeline
       tags:
         project_name: "arxiv-curator"
       environments:
@@ -29,7 +29,7 @@ resources:
               - "${resources.jobs.deploy_agent.id}"
 
     deploy_agent:
-      name: arxiv-agent-deploy-pipeline 
+      name: arxiv-agent-deploy-pipeline
       tags:
         project_name: "arxiv-curator"
       environments:
