@@ -11,9 +11,7 @@ class ProjectConfig:
     catalog_name: str
     schema_name: str
     volume_name: str
-    arxiv_papers_table: str
-    ai_parsed_docs_table: str
-    arxiv_chunks_table: str
+    genie_space_id: str
 
     @classmethod
     def from_yaml(cls, config_path: str | Path, env: str = "dev") -> "ProjectConfig":

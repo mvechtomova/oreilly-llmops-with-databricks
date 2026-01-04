@@ -7,7 +7,13 @@ import arxiv
 from loguru import logger
 from pyspark.sql import SparkSession
 from pyspark.sql import types as T
-from pyspark.sql.functions import col, concat_ws, current_timestamp, explode, udf
+from pyspark.sql.functions import (
+    col,
+    concat_ws,
+    current_timestamp,
+    explode,
+    udf,
+)
 from pyspark.sql.types import ArrayType, StringType, StructField, StructType
 
 from arxiv_curator.config import ProjectConfig
@@ -37,24 +43,13 @@ class DataProcessor:
         self.schema_name = config.schema_name
         self.volume_name = config.volume_name
 
-        # Define schema for the extracted chunks
-        self.chunk_schema = ArrayType(
-            StructType(
-                [
-                    StructField("chunk_id", StringType(), True),
-                    StructField("content", StringType(), True),
-                ]
-            )
-        )
-
-        # Register UDFs
-        self.extract_chunks_udf = udf(self._extract_chunks, self.chunk_schema)
-        self.extract_paper_id_udf = udf(self._extract_paper_id, StringType())
-        self.clean_chunk_udf = udf(self._clean_chunk, StringType())
-
         self.end = time.strftime("%Y%m%d%H%M", time.gmtime())
-        self.pdf_dir = f"/Volumes/{self.catalog_name}/{self.schema_name}/{self.volume_name}/{self.end}"
+        self.pdf_dir = f"/Volumes/{self.catalog_name}/{self.schema_name}\
+            /{self.volume_name}/{self.end}"
         os.makedirs(self.pdf_dir, exist_ok=True)
+        self.arxiv_papers_table = config.get_full_table_name(
+            "arxiv_papers"
+        )
 
     def _get_range_start(self) -> tuple[str, str]:
         """
@@ -65,29 +60,36 @@ class DataProcessor:
         Returns:
             start string in "YYYYMMDDHHMM" format
         """
-        arxiv_papers_table = self.config.get_full_table_name("arxiv_papers_table")
 
-        if self.spark.catalog.tableExists(arxiv_papers_table):
+        if self.spark.catalog.tableExists(self.arxiv_papers_table):
             result = self.spark.sql(f"""
                 SELECT max(processed)
-                FROM {arxiv_papers_table}
+                FROM {self.arxiv_papers_table}
             """).collect()
             start = str(result[0][0])
-            logger.info(f"Found existing arxiv_papers table. Starting from: {start}")
-        else:
-            start = time.strftime("%Y%m%d%H%M", time.gmtime(time.time() - 24 * 3600 * 3))
             logger.info(
-                f"No existing arxiv_papers table. Starting from 3 days ago: {start}"
+                f"Found existing arxiv_papers table. Starting from: {start}"
             )
-
+        else:
+            start = time.strftime(
+                "%Y%m%d%H%M", time.gmtime(time.time() - 24 * 3600 * 3)
+            )
+            logger.info(
+                f"""No existing arxiv_papers table.
+                Starting from 3 days ago: {start}"""
+            )
         return start
 
-    def download_and_store_papers(self) -> tuple[list[dict], str] | tuple[None, None]:
+    def download_and_store_papers(
+        self,
+    ) -> list[dict] | None:
         """
-        Download papers from arxiv and store metadata in arxiv_papers table.
+        Download papers from arxiv and store metadata
+        in arxiv_papers table.
 
         Returns:
-            Tuple of (records, pdf_dir) if papers were downloaded, otherwise (None, None)
+            List of paper metadata dictionaries if papers were downloaded,
+            otherwise None
         """
         start = self._get_range_start()
 
@@ -103,38 +105,39 @@ class DataProcessor:
 
         for paper in papers:
             paper_id = paper.get_short_id()
-
-            retries = 3
-            for attempt in range(retries):
-                try:
-                    paper.download_pdf(dirpath=self.pdf_dir, filename=f"{paper_id}.pdf")
-                    # Collect metadata
-                    records.append(
-                        {
-                            "paper_id": paper_id,
-                            "title": paper.title,
-                            "authors": [author.name for author in paper.authors],
-                            "summary": paper.summary,
-                            "pdf_url": paper.pdf_url,
-                            "published": int(paper.published.strftime("%Y%m%d%H%M")),
-                            "processed": int(self.end),
-                            "volume_path": f"{self.pdf_dir}/{paper_id}.pdf",
-                        }
+            try:
+                paper.download_pdf(
+                    dirpath=self.pdf_dir, filename=f"{paper_id}.pdf"
+                )
+                # Collect metadata
+                records.append(
+                    {
+                        "paper_id": paper_id,
+                        "title": paper.title,
+                        "authors": [
+                            author.name for author in paper.authors
+                        ],
+                        "summary": paper.summary,
+                        "pdf_url": paper.pdf_url,
+                        "published": int(
+                            paper.published.strftime("%Y%m%d%H%M")
+                        ),
+                        "processed": int(self.end),
+                        "volume_path": f"{self.pdf_dir}/{paper_id}.pdf",
+                    }
+                )
+                break
+            except Exception:
+                logger.warning(
+                        f"Paper {paper_id} was not successfully processed."
                     )
-                    break
-                except Exception:
-                    time.sleep(1)
-                    if attempt == retries - 1:
-                        logger.warning(
-                            f"Paper {paper_id} was not successfully processed."
-                        )
             # Avoid hitting API rate limits
-            time.sleep(1)
+            time.sleep(3)
 
         # Only process if we have records
         if len(records) == 0:
             logger.info("No new papers found.")
-            return None, None
+            return None
 
         logger.info(f"Downloaded {len(records)} papers to {self.pdf_dir}")
 
@@ -152,14 +155,16 @@ class DataProcessor:
             ]
         )
 
-        df = self.spark.createDataFrame(records, schema=schema).withColumn(
+        metadata_df = self.spark.createDataFrame(
+            records, schema=schema).withColumn(
             "ingest_ts", current_timestamp()
         )
 
-        arxiv_papers_table = self.config.get_full_table_name("arxiv_papers_table")
-        df.write.format("delta").mode("append").saveAsTable(arxiv_papers_table)
-        logger.info(f"Saved {len(records)} paper records to {arxiv_papers_table}")
-
+        metadata_df.write.format("delta").mode("append").saveAsTable(
+            self.arxiv_papers_table)
+        logger.info(
+            f"Saved {len(records)} paper records to {self.arxiv_papers_table}"
+        )
         return records
 
     def parse_pdfs_with_ai(self) -> None:
@@ -167,9 +172,10 @@ class DataProcessor:
         Parse PDFs using ai_parse_document and store in ai_parsed_docs table.
 
         """
-        ai_parsed_docs_table = self.config.get_full_table_name("ai_parsed_docs_table")
+        ai_parsed_docs_table = self.config.get_full_table_name(
+            "ai_parsed_docs_table"
+        )
 
-        # Create table if it doesn't exist
         self.spark.sql(f"""
             CREATE TABLE IF NOT EXISTS {ai_parsed_docs_table} (
                 path STRING,
@@ -178,7 +184,6 @@ class DataProcessor:
             )
         """)
 
-        # Parse PDFs and insert into table
         self.spark.sql(f"""
             INSERT INTO {ai_parsed_docs_table}
             SELECT
@@ -201,28 +206,22 @@ class DataProcessor:
         Extract chunks from parsed_content JSON.
 
         Args:
-            parsed_content_json: JSON string containing parsed document structure
+            parsed_content_json: JSON string containing 
+            parsed document structure
 
         Returns:
             List of tuples containing (chunk_id, content)
         """
-        if not parsed_content_json:
-            return []
+        parsed_dict = json.loads(parsed_content_json)
+        chunks = []
 
-        try:
-            parsed_dict = json.loads(parsed_content_json)
-            chunks = []
+        for element in parsed_dict.get("document", {}).get("elements", []):
+            if element.get("type") == "text":
+                chunk_id = element.get("id", "")
+                content = element.get("content", "")
+                chunks.append((chunk_id, content))
 
-            for element in parsed_dict.get("document", {}).get("elements", []):
-                if element.get("type") == "text":
-                    chunk_id = element.get("id", "")
-                    content = element.get("content", "")
-                    chunks.append((chunk_id, content))
-
-            return chunks
-        except Exception:
-            # Return empty list if JSON parsing fails
-            return []
+        return chunks
 
     @staticmethod
     def _extract_paper_id(path: str) -> str:
@@ -235,36 +234,21 @@ class DataProcessor:
         Returns:
             Paper ID extracted from the path
         """
-        if not path:
-            return ""
-
-        # Remove .pdf extension and get the last part of the path
         return path.replace(".pdf", "").split("/")[-1]
 
     @staticmethod
     def _clean_chunk(text: str) -> str:
         """
-        Clean and normalize chunk text by:
-        - Trimming whitespace
-        - Fixing hyphenation across line breaks
-        - Collapsing internal newlines into spaces
-        - Collapsing repeated whitespace
-
+        Clean and normalize chunk text
         Args:
             text: Raw text content
 
         Returns:
             Cleaned text content
         """
-        if not text:
-            return ""
-
-        # Trim ends
-        t = text.strip()
-
         # Fix hyphenation across line breaks:
         # "docu-\nments" => "documents"
-        t = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", t)
+        t = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
 
         # Collapse internal newlines into spaces
         t = re.sub(r"\s*\n\s*", " ", t)
@@ -279,28 +263,64 @@ class DataProcessor:
         Process parsed documents to extract and clean chunks.
         Reads from ai_parsed_docs table and saves to arxiv_chunks table.
         """
-        ai_parsed_docs_table = self.config.get_full_table_name("ai_parsed_docs_table")
+        ai_parsed_docs_table = self.config.get_full_table_name(
+            "ai_parsed_docs_table"
+        )
         logger.info(
-            f"Processing parsed documents from {ai_parsed_docs_table} for end date {self.end}"
+            f"""Processing parsed documents from
+            {ai_parsed_docs_table} for end date {self.end}"""
         )
 
-        df = self.spark.table(ai_parsed_docs_table).where(f"processed = {self.end}")
+        df = self.spark.table(ai_parsed_docs_table).where(
+            f"processed = {self.end}"
+        )
+
+        # Define schema for the extracted chunks
+        chunk_schema = ArrayType(
+            StructType(
+                [
+                    StructField("chunk_id", StringType(), True),
+                    StructField("content", StringType(), True),
+                ]
+            )
+        )
+
+        extract_chunks_udf = udf(self._extract_chunks, chunk_schema)
+        extract_paper_id_udf = udf(self._extract_paper_id, StringType())
+        clean_chunk_udf = udf(self._clean_chunk, StringType())
+
+        metadata_df = self.spark.table(self.arxiv_papers_table).select(
+            col("paper_id"),
+            col("title"),
+            col("summary"),
+            concat_ws(", ", col("authors")).alias("authors"),
+            (col("published") / 100000000).cast("int").alias("year"),
+            ((col("published") % 100000000) / 1000000).cast("int").alias("month"),
+            ((col("published") % 1000000) / 10000).cast("int").alias("day"),
+)
 
         # Create the transformed dataframe
         chunks_df = (
-            df.withColumn("paper_id", self.extract_paper_id_udf(col("path")))
-            .withColumn("chunks", self.extract_chunks_udf(col("parsed_content")))
+            df.withColumn("paper_id", extract_paper_id_udf(col("path")))
+            .withColumn(
+                "chunks", extract_chunks_udf(col("parsed_content"))
+            )
             .withColumn("chunk", explode(col("chunks")))
             .select(
                 col("paper_id"),
                 col("chunk.chunk_id").alias("chunk_id"),
-                self.clean_chunk_udf(col("chunk.content")).alias("text"),
-                concat_ws("_", col("paper_id"), col("chunk.chunk_id")).alias("id"),
+                clean_chunk_udf(col("chunk.content")).alias("text"),
+                concat_ws("_", col("paper_id"), col("chunk.chunk_id")).alias(
+                    "id"
+                ),
             )
+            .join(metadata_df, "paper_id", "left")
         )
 
         # Write to table
-        arxiv_chunks_table = self.config.get_full_table_name("arxiv_chunks_table")
+        arxiv_chunks_table = self.config.get_full_table_name(
+            "arxiv_chunks_table"
+        )
         chunks_df.write.mode("append").saveAsTable(arxiv_chunks_table)
         logger.info(f"Saved chunks to {arxiv_chunks_table}")
 
@@ -320,12 +340,13 @@ class DataProcessor:
         records = self.download_and_store_papers()
 
         # Only continue if we have new papers
-        if records is None or len(records) == 0:
+        if records is None:
             logger.info("No new papers to process. Exiting.")
             return
 
         # Step 2: Parse PDFs with ai_parse_document
         self.parse_pdfs_with_ai()
+        logger.info("Parseed documents.")
 
         # Step 3: Process chunks
         self.process_chunks()

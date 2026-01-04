@@ -63,10 +63,10 @@ else:
 
 end = time.strftime("%Y%m%d%H%M", time.gmtime())
 
+# COMMAND ----------
 search = arxiv.Search(
     query=f"cat:cs.AI AND submittedDate:[{start} TO {end}]"
 )
-
 papers = client.results(search)
 
 # COMMAND ----------
@@ -217,7 +217,7 @@ extract_paper_id_udf = udf(extract_paper_id, StringType())
 def clean_chunk(text: str) -> str:
     # fix hyphenation across line breaks:
     # "docu-\nments" => "documents"
-    t = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", t)
+    t = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
 
     # collapse internal newlines into spaces
     t = re.sub(r"\s*\n\s*", " ", t)
