@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 
 from arxiv_curator.config import ProjectConfig
 from arxiv_curator.data_processor import DataProcessor
+from arxiv_curator.vector_search import VectorSearchManager
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -39,3 +40,9 @@ spark = SparkSession.builder.getOrCreate()
 # Initialize DataProcessor
 data_processor = DataProcessor(config=project_config, spark=spark)
 data_processor.process_and_save()
+
+# Sync vector search index
+logger.info("Syncing vector search index...")
+vector_search_manager = VectorSearchManager(config=project_config)
+vector_search_manager.sync_index()
+logger.info("Vector search index sync complete!")

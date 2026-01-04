@@ -2,9 +2,9 @@
 
 from arxiv_curator.config import ProjectConfig
 
-project_config = ProjectConfig.from_yaml("../project_config.yml")
-catalog_name = project_config.catalog_name
-schema_name = project_config.schema_name
+cfg = ProjectConfig.from_yaml("../project_config.yml")
+catalog = cfg.catalog
+schema = cfg.schema
 
 
 # COMMAND ----------
@@ -39,7 +39,7 @@ serialized_space = {
     "data_sources": {
         "tables": [
             {
-                "identifier": f"{catalog_name}.{schema_name}.arxiv_papers",
+                "identifier": f"{catalog}.{schema}.arxiv_papers",
                 "column_configs": [
                     {"column_name": "authors"},
                     {"column_name": "ingest_ts", "get_example_values": True},

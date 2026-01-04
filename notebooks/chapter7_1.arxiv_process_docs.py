@@ -20,17 +20,17 @@ from arxiv_curator.config import ProjectConfig
 
 spark = SparkSession.builder.getOrCreate()
 
-project_config = ProjectConfig.from_yaml("../project_config.yml")
-catalog_name = project_config.catalog_name
-schema_name = project_config.schema_name
-volume_name = project_config.volume_name
+cfg = ProjectConfig.from_yaml("../project_config.yml")
+catalog = cfg.catalog
+schema = cfg.schema
+volume= cfg.volume
 
 spark.sql(
-    f"CREATE SCHEMA IF NOT EXISTS {catalog_name}.{schema_name}"
+    f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"
 )
 spark.sql(
     f"CREATE VOLUME IF NOT EXISTS "
-    f"{catalog_name}.{schema_name}.{volume_name}"
+    f"{catalog}.{schema}.{volume}"
 )
 
 # COMMAND ----------
@@ -47,7 +47,7 @@ import arxiv
 import time
 
 client = arxiv.Client()
-metadata_table = f"{catalog_name}.{schema_name}.arxiv_papers"
+metadata_table = f"{catalog}.{schema}.arxiv_papers"
 
 if spark.catalog.tableExists(metadata_table):
     start = str(
@@ -77,9 +77,7 @@ papers = client.results(search)
 import os
 
 records = []
-pdf_dir = (
-        f"/Volumes/{catalog_name}/{schema_name}/{volume_name}/{end}"
-    )
+pdf_dir = (f"/Volumes/{catalog}/{schema}/{volume}/{end}")
 os.makedirs(pdf_dir, exist_ok=True)
 
 for paper in papers:
@@ -142,7 +140,7 @@ if len(records) > 0:
     spark.sql(
         f"""
     CREATE TABLE IF NOT EXISTS
-    {catalog_name}.{schema_name}.ai_parsed_docs (
+    {catalog}.{schema}.ai_parsed_docs (
     path STRING,
     parsed_content STRING,
     processed LONG)
@@ -151,7 +149,7 @@ if len(records) > 0:
 
     spark.sql(
         f"""
-    INSERT INTO {catalog_name}.{schema_name}.ai_parsed_docs
+    INSERT INTO {catalog}.{schema}.ai_parsed_docs
     SELECT
     path,
     ai_parse_document(content) AS parsed_content,
@@ -202,7 +200,7 @@ chunk_schema = ArrayType(
 extract_chunks_udf = udf(extract_chunks, chunk_schema)
 
 
-df = spark.table(f"{catalog_name}.{schema_name}.ai_parsed_docs").where(
+df = spark.table(f"{catalog}.{schema}.ai_parsed_docs").where(
     f"processed = {end}"
 )
 
@@ -261,7 +259,7 @@ chunks_df = (
 
 # COMMAND ----------
 # Write to table
-chunks_table = f"{catalog_name}.{schema_name}.arxiv_chunks"
+chunks_table = f"{catalog}.{schema}.arxiv_chunks"
 chunks_df.write.mode("append").saveAsTable(chunks_table)
 
 # COMMAND ----------

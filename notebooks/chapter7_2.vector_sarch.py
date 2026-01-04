@@ -6,9 +6,9 @@ from arxiv_curator.config import ProjectConfig
 
 spark = SparkSession.builder.getOrCreate()
 
-project_config = ProjectConfig.from_yaml("../project_config.yml")
-catalog_name = project_config.catalog_name
-schema_name = project_config.schema_name
+cfg = ProjectConfig.from_yaml("../project_config.yml")
+catalog= cfg.catalog
+schema = cfg.schema
 
 
 # COMMAND ----------
@@ -21,27 +21,28 @@ endpoint_exists = any(
     item.name == vector_search_endpoint_name for item in vsc.list_endpoints()
 )
 if not endpoint_exists:
-    vsc.create_endpoint(name=vector_search_endpoint_name,
+    vsc.create_endpoint_and_wait(name=vector_search_endpoint_name,
                         endpoint_type="STANDARD")
 
 # COMMAND ----------
-vs_index_fullname = f"{catalog_name}.{schema_name}.arxiv_index"
+vs_index_fullname = f"{catalog}.{schema}.arxiv_index"
 
 embedding_model_endpoint = "databricks-gte-large-en"
 
 
 
-vs_index_fullname = f"{catalog_name}.{schema_name}.arxiv_index"
+vs_index_fullname = f"{catalog}.{schema}.arxiv_index"
 embedding_model_endpoint = "databricks-gte-large-en"
 
 index_exists = any(
-    item.name == vector_search_endpoint_name for item in vsc.list_indexes(vector_search_endpoint_name)
+    item.name == vector_search_endpoint_name for item in vsc.list_indexes(
+        vector_search_endpoint_name)
 )
 
 if not index_exists:
     index = vsc.create_delta_sync_index(
         endpoint_name=vector_search_endpoint_name,
-        source_table_name=f"{catalog_name}.{schema_name}.arxiv_chunks",
+        source_table_name=f"{catalog}.{schema}.arxiv_chunks",
         index_name=vs_index_fullname,
         pipeline_type="TRIGGERED",
         primary_key="id",
@@ -62,5 +63,6 @@ results = index.similarity_search(
     filters={'year': "2026"},
     num_results=5,
     query_type = "hybrid",
-    reranker=DatabricksReranker(columns_to_rerank=["text", "title", "summary"])
+    reranker=DatabricksReranker(
+        columns_to_rerank=["text", "title", "summary"])
     )
