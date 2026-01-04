@@ -1,12 +1,13 @@
 # Databricks notebook source
 # https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp
 # https://docs.databricks.com/aws/en/mlflow3/genai/tracing/prod-tracing
+# https://docs.databricks.com/aws/en/generative-ai/agent-framework/author-agent
 
 # %pip install arxiv_curator-0.1.1-py3-none-any.whl
 
 # COMMAND ----------
 import mlflow
-from agent import agent, llm_endpoint
+from agent import agent
 from mlflow.models.resources import (
     DatabricksGenieSpace,
     DatabricksServingEndpoint,
@@ -14,12 +15,27 @@ from mlflow.models.resources import (
 )
 from mlflow.utils.environment import _mlflow_conda_env
 
+from arxiv_curator.config import ProjectConfig
+
 # COMMAND ----------
 # Test the agent
+project_config = ProjectConfig.from_yaml("../project_config.yml")
+catalog_name = project_config.catalog_name
+schema_name = project_config.schema_name
+genie_space_id = project_config.genie_space_id
+llm_endpoint = project_config.llm_endpoint
 
-catalog = "mlops_dev"
-schema = "arxiv"
 model_name = "arxiv_agent"
+
+system_prompt = """You are a helpful AI assistant with access
+to tools for searching arXiv papers and querying a Genie space.
+
+When helping users:
+- Use the vector search tool to find relevant arXiv papers based on semantic similarity
+- Use the Genie query_space tool to answer questions about the data in the space
+- Be concise and informative in your responses
+- Cite paper IDs when referencing specific papers
+"""
 
 test_request = {
     "input": [
@@ -27,11 +43,12 @@ test_request = {
     ]
 }
 
-
+# COMMAND ----------
 # Run the agent
 # result = agent.predict(test_request)
 # print(result.model_dump(exclude_none=True))
 
+# COMMAND ----------
 # Run the agent with streaming
 for chunk in agent.predict_stream(test_request):
     print(chunk.model_dump(exclude_none=True))
@@ -41,19 +58,16 @@ for chunk in agent.predict_stream(test_request):
 
 git_sha = "abc"  # Replace with actual git sha in production
 run_id = "unset"  # Replace with actual run id in production
-table_ref = ""
-version = 0
 
 
 resources = [
     DatabricksServingEndpoint(endpoint_name=llm_endpoint),
-    DatabricksGenieSpace(genie_space_id="01f0c3f882e41bb9be96b4ddf295d2a4"),
-    DatabricksVectorSearchIndex(index_name=f"{catalog}.{schema}.arxiv_index"),
+    DatabricksGenieSpace(genie_space_id=genie_space_id),
+    DatabricksVectorSearchIndex(index_name=f"{catalog_name}.{schema_name}.arxiv_index"),
 ]
 
 code_paths = ["arxiv_curator-0.1.1-py3-none-any.whl"]
 additional_pip_deps = []
-eval_df = ""
 for package in code_paths:
     whl_name = package.split("/")[-1]
     additional_pip_deps.append(f"code/{whl_name}")
@@ -65,13 +79,19 @@ test_request = {
     ]
 }
 
-with mlflow.start_run(
-    run_name="arxiv-mcp-agent", tags={"git_sha": git_sha, "run_id": run_id}
-) as run:
-    sql = f"SELECT * FROM {table_ref} VERSION AS OF {version}"
-    eval_df = mlflow.data.from_spark(df=eval_df, sql=sql)
-    mlflow.log_input(eval_df, context="evaluation")
+model_config = {
+        "catalog_name": catalog_name,
+        "schema_name": schema_name,
+        "genie_space_id": genie_space_id,
+        "system_prompt": system_prompt,
+        "llm_endpoint": llm_endpoint,
+    }
 
+mlflow.set_experiment("/Shared/genai-arxiv-agent")
+with mlflow.start_run(
+    run_name="arxiv-mcp-agent",
+    tags={"git_sha": git_sha, "run_id": run_id}
+) as run:
     model_info = mlflow.pyfunc.log_model(
         name="agent",
         python_model="agent.py",
@@ -79,6 +99,7 @@ with mlflow.start_run(
         input_example=test_request,
         conda_env=_mlflow_conda_env(additional_pip_deps=additional_pip_deps),
         code_paths=code_paths,
+        model_config=model_config
     )
 
 # COMMAND ----------
@@ -87,7 +108,7 @@ with mlflow.start_run(
 
 registered_model = mlflow.register_model(
     model_uri=model_info.model_uri,
-    name=f"{catalog}.{schema}.{model_name}",
+    name=f"{catalog_name}.{schema_name}.{model_name}",
 )
 
 
@@ -101,7 +122,7 @@ mlflow.models.predict(
 from databricks import agents
 
 agents.deploy(
-    f"{catalog}.{schema}.{model_name}",
+    f"{catalog_name}.{schema_name}.{model_name}",
     registered_model.version,
     tags={"endpointSource": "docs"},
     deploy_feedback_model=False,

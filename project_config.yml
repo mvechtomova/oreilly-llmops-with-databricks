@@ -2,18 +2,19 @@ dev:
   catalog_name: mlops_dev
   schema_name: arxiv
   volume_name: arxiv_papers
-  genie_space_id: 01f0c3f882e41bb9be96b4ddf295d2a4
+  genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
+  llm_endpoint: databricks-gpt-oss-120b
 
 acc:
   catalog_name: mlops_acc
   schema_name: arxiv
   volume_name: arxiv_papers
-  genie_space_id: 01f0c3f882e41bb9be96b4ddf295d2a4
+  genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
+  llm_endpoint: databricks-gpt-oss-120b
 
 prd:
   catalog_name: mlops_prd
   schema_name: arxiv
   volume_name: arxiv_papers
-  genie_space_id: 01f0c3f882e41bb9be96b4ddf295d2a4
-
-model_config:
+  genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
+  llm_endpoint: databricks-gpt-oss-120b

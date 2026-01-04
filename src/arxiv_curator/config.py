@@ -12,6 +12,7 @@ class ProjectConfig:
     schema_name: str
     volume_name: str
     genie_space_id: str
+    llm_endpoint: str
 
     @classmethod
     def from_yaml(cls, config_path: str | Path, env: str = "dev") -> "ProjectConfig":

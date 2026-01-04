@@ -1,10 +1,6 @@
 # Databricks notebook source
 from collections.abc import Callable
-
-from databricks.sdk import WorkspaceClient
-from databricks_mcp import DatabricksMCPClient
 from pydantic import BaseModel
-
 
 # COMMAND ----------
 class ToolInfo(BaseModel):
@@ -20,6 +16,9 @@ class ToolInfo(BaseModel):
     exec_fn: Callable
 
 # COMMAND ----------
+from databricks.sdk import WorkspaceClient
+from databricks_mcp import DatabricksMCPClient
+
 def create_managed_exec_fn(
     server_url: str, tool_name: str, w: WorkspaceClient
 ) -> Callable:
@@ -56,6 +55,9 @@ async def create_mcp_tools(w: WorkspaceClient,
 # COMMAND ----------
 import asyncio
 from arxiv_curator.config import ProjectConfig
+import nest_asyncio
+
+nest_asyncio.apply()
 
 project_config = ProjectConfig.from_yaml("../project_config.yml")
 catalog_name = project_config.catalog_name
@@ -76,3 +78,4 @@ tools = asyncio.run(
         url_list=MANAGED_MCP_SERVER_URLS,
     )
 )
+# COMMAND ----------
