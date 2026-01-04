@@ -14,7 +14,7 @@ acc:
 
 prd:
   catalog: mlops_prd
-  schemae: arxiv
-  volumee: arxiv_papers
+  schema: arxiv
+  volume: arxiv_papers
   genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
   llm_endpoint: databricks-gpt-oss-120b

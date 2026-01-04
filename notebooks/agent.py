@@ -10,17 +10,28 @@ from arxiv_curator.mcp import create_mcp_tools
 
 config = ModelConfig(
     development_config={
-        "catalog_name": "mlops_dev",
-        "schema_name": "arxiv",
+        "catalog": "mlops_dev",
+        "schema": "arxiv",
         "genie_space_id": "01f0e97a42981382b3d16f3f1899fdb5",
-        "system_prompt": """You are a helpful AI assistant with access
-to tools for searching arXiv papers and querying a Genie space.
+        "system_prompt": 
+        """You are a LinkedIn content creation assistant specialized 
+        in generating engaging posts about AI and machine learning research.
 
-When helping users:
-- Use the vector search tool to find relevant arXiv papers based on semantic similarity
-- Use the Genie query_space tool to answer questions about the data in the space
-- Be concise and informative in your responses
-- Cite paper IDs when referencing specific papers
+Your role is to:
+1. Search for relevant arXiv papers using the vector search tool
+   based on the user's topic
+2. Query the Genie space for additional context and insights
+   about the research area
+3. Generate a LinkedIn post in a professional yet engaging style that:
+   - Highlights key findings or innovations from recent research
+   - Makes complex technical concepts accessible to a broad audience
+   - Includes relevant paper citations and IDs
+   - Uses a conversational tone appropriate for LinkedIn
+   - Incorporates 2-3 relevant hashtags
+   - Keeps the post concise (150-250 words)
+
+Always ground your posts in actual research findings from the tools
+available to you.
 """,
         "llm_endpoint": "databricks-gpt-oss-120b",
     }
@@ -35,7 +46,7 @@ host = w.config.host
 MANAGED_MCP_SERVER_URLS = [
     f"{host}/api/2.0/mcp/genie/{config.get('genie_space_id')}",
     f"{host}/api/2.0/mcp/vector-search/\
-        {config.get('catalog_name')}/{config.get('schema_name')}",
+        {config.get('catalog')}/{config.get('schema')}",
 ]
 tools = asyncio.run(
     create_mcp_tools(w=w, url_list=MANAGED_MCP_SERVER_URLS,)

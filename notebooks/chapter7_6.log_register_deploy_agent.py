@@ -19,27 +19,37 @@ from arxiv_curator.config import ProjectConfig
 
 # COMMAND ----------
 # Test the agent
-project_config = ProjectConfig.from_yaml("../project_config.yml")
-catalog_name = project_config.catalog_name
-schema_name = project_config.schema_name
-genie_space_id = project_config.genie_space_id
-llm_endpoint = project_config.llm_endpoint
-
+cfg = ProjectConfig.from_yaml("../project_config.yml")
+catalog = cfg.catalog
+schema = cfg.schema
+genie_space_id = cfg.genie_space_id
+llm_endpoint = cfg.llm_endpoint
 model_name = "arxiv_agent"
 
-system_prompt = """You are a helpful AI assistant with access
-to tools for searching arXiv papers and querying a Genie space.
+system_prompt = """You are a LinkedIn content creation assistant specialized 
+        in generating engaging posts about AI and machine learning research.
 
-When helping users:
-- Use the vector search tool to find relevant arXiv papers based on semantic similarity
-- Use the Genie query_space tool to answer questions about the data in the space
-- Be concise and informative in your responses
-- Cite paper IDs when referencing specific papers
+Your role is to:
+1. Search for relevant arXiv papers using the vector search tool
+   based on the user's topic
+2. Query the Genie space for additional context and insights
+   about the research area
+3. Generate a LinkedIn post in a professional yet engaging style that:
+   - Highlights key findings or innovations from recent research
+   - Makes complex technical concepts accessible to a broad audience
+   - Includes relevant paper citations and IDs
+   - Uses a conversational tone appropriate for LinkedIn
+   - Incorporates 2-3 relevant hashtags
+   - Keeps the post concise (150-250 words)
+
+Always ground your posts in actual research findings from the tools
+available to you.
 """
 
 test_request = {
     "input": [
-        {"role": "user", "content": "What are recent papers about LLMs and reasoning?"}
+        {"role": "user",
+         "content": "What are recent papers about LLMs and reasoning?"}
     ]
 }
 
@@ -63,7 +73,7 @@ run_id = "unset"  # Replace with actual run id in production
 resources = [
     DatabricksServingEndpoint(endpoint_name=llm_endpoint),
     DatabricksGenieSpace(genie_space_id=genie_space_id),
-    DatabricksVectorSearchIndex(index_name=f"{catalog_name}.{schema_name}.arxiv_index"),
+    DatabricksVectorSearchIndex(index_name=f"{catalog}.{schema}.arxiv_index"),
 ]
 
 code_paths = ["arxiv_curator-0.1.1-py3-none-any.whl"]
@@ -80,8 +90,8 @@ test_request = {
 }
 
 model_config = {
-        "catalog_name": catalog_name,
-        "schema_name": schema_name,
+        "catalog": catalog,
+        "schema": schema,
         "genie_space_id": genie_space_id,
         "system_prompt": system_prompt,
         "llm_endpoint": llm_endpoint,
@@ -108,7 +118,7 @@ with mlflow.start_run(
 
 registered_model = mlflow.register_model(
     model_uri=model_info.model_uri,
-    name=f"{catalog_name}.{schema_name}.{model_name}",
+    name=f"{catalog}.{schema}.{model_name}",
 )
 
 
@@ -122,7 +132,7 @@ mlflow.models.predict(
 from databricks import agents
 
 agents.deploy(
-    f"{catalog_name}.{schema_name}.{model_name}",
+    f"{catalog}.{schema}.{model_name}",
     registered_model.version,
     tags={"endpointSource": "docs"},
     deploy_feedback_model=False,
