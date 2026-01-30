@@ -1,20 +1,17 @@
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 
-@dataclass
 class ProjectConfig:
     """Configuration for the arxiv curator project."""
-
-    catalog_name: str
-    schema_name: str
-    volume_name: str
+    catalog: str
+    schema: str
+    volume: str
     genie_space_id: str
     llm_endpoint: str
+    system_prompt: str
 
-    @classmethod
     def from_yaml(cls, config_path: str | Path, env: str = "dev") -> "ProjectConfig":
         """
         Load configuration from YAML file.
@@ -33,18 +30,6 @@ class ProjectConfig:
 
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
-        config_dict = config_dict[env]
-        return cls(**config_dict)
-
-    def get_full_table_name(self, table_attr: str) -> str:
-        """
-        Get fully qualified table name.
-
-        Args:
-            table_attr: Attribute name for the table (e.g., 'arxiv_papers_table')
-
-        Returns:
-            Fully qualified table name (catalog.schema.table)
-        """
-        table_name = getattr(self, table_attr)
-        return f"{self.catalog_name}.{self.schema_name}.{table_name}"
+        env_config = config_dict[env]
+        env_config["system_prompt"] = config_dict["system_prompt"]
+        return cls(**env_config)

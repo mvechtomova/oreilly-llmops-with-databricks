@@ -13,32 +13,12 @@ config = ModelConfig(
         "catalog": "mlops_dev",
         "schema": "arxiv",
         "genie_space_id": "01f0e97a42981382b3d16f3f1899fdb5",
-        "system_prompt": 
-        """You are a LinkedIn content creation assistant specialized 
-        in generating engaging posts about AI and machine learning research.
-
-Your role is to:
-1. Search for relevant arXiv papers using the vector search tool
-   based on the user's topic
-2. Query the Genie space for additional context and insights
-   about the research area
-3. Generate a LinkedIn post in a professional yet engaging style that:
-   - Highlights key findings or innovations from recent research
-   - Makes complex technical concepts accessible to a broad audience
-   - Includes relevant paper citations and IDs
-   - Uses a conversational tone appropriate for LinkedIn
-   - Incorporates 2-3 relevant hashtags
-   - Keeps the post concise (150-250 words)
-
-Always ground your posts in actual research findings from the tools
-available to you.
-""",
+        "system_prompt": "prompt placeholder",
         "llm_endpoint": "databricks-gpt-oss-120b",
     }
 )
 
 nest_asyncio.apply()
-mlflow.set_experiment("/Shared/genai-arxiv-agent")
 
 w = WorkspaceClient()
 host = w.config.host

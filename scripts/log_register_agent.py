@@ -66,10 +66,6 @@ test_request = {
 
 resources = [DatabricksServingEndpoint(endpoint_name=llm_endpoint)]
 
-additional_pip_deps = []
-for package in code_paths:
-    whl_name = package.split("/")[-1]
-    additional_pip_deps.append(f"code/{whl_name}")
 
 tags = {"git_sha": args.git_sha, "run_id": args.run_id}
 
@@ -79,8 +75,6 @@ with mlflow.start_run(run_name="arxiv-mcp-agent", tags=tags) as run:
         python_model="agent.py",
         resources=resources,
         input_example=test_request,
-        conda_env=_mlflow_conda_env(additional_pip_deps=additional_pip_deps),
-        code_paths=code_paths,
     )
 
 # Register the model to Unity Catalog
@@ -92,6 +86,7 @@ registered_model = mlflow.register_model(
     model_uri=model_info.model_uri,
     name=model_name,
     tags=tags,
+    env_pack="databricks_model_serving"
 )
 
 client = MlflowClient()

@@ -1,14 +1,21 @@
 import json
 import warnings
 from collections.abc import Generator
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
 import backoff
 import mlflow
+from mlflow import MlflowClient
 import openai
 from databricks.sdk import WorkspaceClient
 from mlflow.entities import SpanType
+from mlflow.models.resources import (
+    DatabricksGenieSpace,
+    DatabricksServingEndpoint,
+    DatabricksVectorSearchIndex,
+)
 from mlflow.pyfunc import ResponsesAgent
 from mlflow.types.responses import (
     ResponsesAgentRequest,
@@ -18,6 +25,7 @@ from mlflow.types.responses import (
     to_chat_completions_input,
 )
 
+from arxiv_curator.config import ProjectConfig
 from arxiv_curator.mcp import ToolInfo
 
 
@@ -117,3 +125,87 @@ class ArxivAgent(ResponsesAgent):
         ]
 
         yield from self.call_and_run_tools(messages)
+
+def log_register_agent(
+    cfg: ProjectConfig,
+    git_sha: str,
+    run_id: str,
+    job_id: str,
+    agent_code_path: str,
+    model_name: str,
+    experiment_path: str = "/Shared/genai-arxiv-agent",
+) -> mlflow.entities.model_registry.RegisteredModel:
+    """
+    Log and register an MLflow agent model to Unity Catalog.
+
+    Args:
+        cfg: Project configuration containing catalog, schema, and other settings.
+        git_sha: Git commit SHA for tracking.
+        run_id: Run identifier for tracking.
+        job_id: Job identifier for tracking.
+        model_name: Model path in Unity Catalog.
+        agent_code_path: Path to the agent Python file.
+        experiment_path: MLflow experiment path.
+
+    Returns:
+        RegisteredModel object from Unity Catalog.
+    """
+
+
+    resources = [
+        DatabricksServingEndpoint(endpoint_name=cfg.llm_endpoint),
+        DatabricksGenieSpace(genie_space_id=cfg.genie_space_id),
+        DatabricksVectorSearchIndex(
+            index_name=f"{cfg.catalog}.{cfg.schema}.arxiv_index"
+        ),
+    ]
+
+    model_config = {
+        "catalog": cfg.catalog,
+        "schema": cfg.schema,
+        "genie_space_id": cfg.genie_space_id,
+        "system_prompt": cfg.system_prompt,
+        "llm_endpoint": cfg.llm_endpoint,
+    }
+
+    test_request = {
+    "input": [
+        {"role": "user",
+         "content": "What are recent papers about LLMs and reasoning?"}
+    ]
+    }
+
+    mlflow.set_experiment(experiment_path)
+    ts = datetime.now().strftime("%Y-%m-%d")
+
+    with mlflow.start_run(
+        run_name=f"arxiv-mcp-agent-{ts}",
+        tags={"git_sha": git_sha, "run_id": run_id},
+    ):
+        model_info = mlflow.pyfunc.log_model(
+            name="agent",
+            python_model=agent_code_path,
+            resources=resources,
+            input_example=test_request,
+            model_config=model_config,
+        )
+
+    registered_model = mlflow.register_model(
+        model_uri=model_info.model_uri,
+        name=model_name,
+        env_pack="databricks_model_serving"
+    )
+
+    client = MlflowClient()
+    client.set_registered_model_alias(
+        name=model_name,
+        alias="latest-model",
+        version=registered_model.version,
+    )
+
+    client.update_registered_model(
+        model_name=model_name,
+        deployment_job_id=job_id
+    )
+
+    return registered_model

@@ -7,13 +7,12 @@
 
 # COMMAND ----------
 import mlflow
-from agent import agent
+from arxiv_agent import agent
 from mlflow.models.resources import (
     DatabricksGenieSpace,
     DatabricksServingEndpoint,
     DatabricksVectorSearchIndex,
 )
-from mlflow.utils.environment import _mlflow_conda_env
 
 from arxiv_curator.config import ProjectConfig
 
@@ -24,27 +23,8 @@ catalog = cfg.catalog
 schema = cfg.schema
 genie_space_id = cfg.genie_space_id
 llm_endpoint = cfg.llm_endpoint
+system_prompt = cfg.system_prompt
 model_name = "arxiv_agent"
-
-system_prompt = """You are a LinkedIn content creation assistant specialized 
-        in generating engaging posts about AI and machine learning research.
-
-Your role is to:
-1. Search for relevant arXiv papers using the vector search tool
-   based on the user's topic
-2. Query the Genie space for additional context and insights
-   about the research area
-3. Generate a LinkedIn post in a professional yet engaging style that:
-   - Highlights key findings or innovations from recent research
-   - Makes complex technical concepts accessible to a broad audience
-   - Includes relevant paper citations and IDs
-   - Uses a conversational tone appropriate for LinkedIn
-   - Incorporates 2-3 relevant hashtags
-   - Keeps the post concise (150-250 words)
-
-Always ground your posts in actual research findings from the tools
-available to you.
-"""
 
 test_request = {
     "input": [
@@ -76,13 +56,6 @@ resources = [
     DatabricksVectorSearchIndex(index_name=f"{catalog}.{schema}.arxiv_index"),
 ]
 
-code_paths = ["arxiv_curator-0.1.1-py3-none-any.whl"]
-additional_pip_deps = []
-for package in code_paths:
-    whl_name = package.split("/")[-1]
-    additional_pip_deps.append(f"code/{whl_name}")
-
-
 test_request = {
     "input": [
         {"role": "user", "content": "What are recent papers about LLMs and reasoning?"}
@@ -104,11 +77,9 @@ with mlflow.start_run(
 ) as run:
     model_info = mlflow.pyfunc.log_model(
         name="agent",
-        python_model="agent.py",
+        python_model="arxiv_agent.py",
         resources=resources,
         input_example=test_request,
-        conda_env=_mlflow_conda_env(additional_pip_deps=additional_pip_deps),
-        code_paths=code_paths,
         model_config=model_config
     )
 
@@ -119,6 +90,7 @@ with mlflow.start_run(
 registered_model = mlflow.register_model(
     model_uri=model_info.model_uri,
     name=f"{catalog}.{schema}.{model_name}",
+    env_pack="databricks_model_serving"
 )
 
 
