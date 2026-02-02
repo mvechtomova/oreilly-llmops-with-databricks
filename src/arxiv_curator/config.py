@@ -1,9 +1,10 @@
+from pydantic import BaseModel
 from pathlib import Path
 
 import yaml
 
 
-class ProjectConfig:
+class ProjectConfig(BaseModel):
     """Configuration for the arxiv curator project."""
     catalog: str
     schema: str
@@ -12,7 +13,8 @@ class ProjectConfig:
     llm_endpoint: str
     system_prompt: str
 
-    def from_yaml(cls, config_path: str | Path, env: str = "dev") -> "ProjectConfig":
+    @classmethod
+    def from_yaml(cls: "ProjectConfig", config_path: str, env: str = "dev") -> "ProjectConfig":
         """
         Load configuration from YAML file.
 

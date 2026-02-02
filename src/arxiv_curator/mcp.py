@@ -37,25 +37,6 @@ async def create_mcp_tools(w: WorkspaceClient, url_list: list[str]) -> list[Tool
             # Get the input schema and remove conversation_id if present
             input_schema = mcp_tool.inputSchema.copy() if mcp_tool.inputSchema else {}
 
-            # Remove conversation_id from properties and required fields
-            if (
-                "properties" in input_schema
-                and "conversation_id" in input_schema["properties"]
-            ):
-                input_schema["properties"] = {
-                    k: v
-                    for k, v in input_schema["properties"].items()
-                    if k != "conversation_id"
-                }
-
-            if (
-                "required" in input_schema
-                and "conversation_id" in input_schema["required"]
-            ):
-                input_schema["required"] = [
-                    r for r in input_schema["required"] if r != "conversation_id"
-                ]
-
             tool_spec = {
                 "type": "function",
                 "function": {

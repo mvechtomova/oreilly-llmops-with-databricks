@@ -1,4 +1,5 @@
 import json
+import os
 import warnings
 from collections.abc import Generator
 from datetime import datetime
@@ -49,8 +50,8 @@ class ArxivAgent(ResponsesAgent):
         """Executes the specified tool with the given arguments."""
         return self._tools_dict[tool_name].exec_fn(**args)
 
-    @backoff.on_exception(backoff.expo, openai.RateLimitError)
     @mlflow.trace(span_type=SpanType.LLM)
+    @backoff.on_exception(backoff.expo, openai.RateLimitError)
     def call_llm(
         self, messages: list[dict[str, Any]]
     ) -> Generator[dict[str, Any], None, None]:
@@ -120,6 +121,31 @@ class ArxivAgent(ResponsesAgent):
     def predict_stream(
         self, request: ResponsesAgentRequest
     ) -> Generator[ResponsesAgentStreamEvent, None, None]:
+        # Build trace tags and metadata from custom inputs and environment variables
+        trace_tags = {}
+        trace_metadata = {}
+
+        # Add custom inputs (session_id, request_id) if provided
+        if request.custom_inputs:
+            if session_id := request.custom_inputs.get("session_id"):
+                trace_metadata["mlflow.trace.session"] = session_id
+            if request_id := request.custom_inputs.get("request_id"):
+                trace_tags["request_id"] = request_id
+
+        # Add deployment metadata from environment variables
+        if git_sha := os.getenv("GIT_SHA"):
+            trace_tags["git_sha"] = git_sha
+        if endpoint_name := os.getenv("MODEL_SERVING_ENDPOINT_NAME"):
+            trace_tags["model_serving_endpoint_name"] = endpoint_name
+        if model_version := os.getenv("MODEL_VERSION"):
+            trace_tags["model_version"] = model_version
+
+        if trace_tags or trace_metadata:
+            mlflow.update_current_trace(
+                tags=trace_tags or None,
+                metadata=trace_metadata or None
+            )
+
         messages = [{"role": "system", "content": self.system_prompt}] + [
             i.model_dump() for i in request.input
         ]
