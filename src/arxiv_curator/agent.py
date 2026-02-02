@@ -7,9 +7,9 @@ from uuid import uuid4
 
 import backoff
 import mlflow
-from mlflow import MlflowClient
 import openai
 from databricks.sdk import WorkspaceClient
+from mlflow import MlflowClient
 from mlflow.entities import SpanType
 from mlflow.models.resources import (
     DatabricksGenieSpace,
