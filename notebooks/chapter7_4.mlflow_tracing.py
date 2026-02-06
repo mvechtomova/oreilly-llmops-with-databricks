@@ -1,59 +1,52 @@
 # Databricks notebook source
-
-# To see detailed optimization output during alignment, enable DEBUG logging:
-# import logging
-# logging.getLogger("mlflow.genai.judges.optimizers.simba").setLevel(logging.DEBUG)
-import asyncio
-
 import mlflow
-import nest_asyncio
-from databricks.sdk import WorkspaceClient
+from arxiv_curator.utils.common import set_mlflow_tracking_uri
 
-from arxiv_curator.agent import ArxivAgent
-from arxiv_curator.mcp import create_mcp_tools
-from arxiv_curator.config import ProjectConfig
-
-
-cfg = ProjectConfig.from_yaml("../project_config.yml")
+set_mlflow_tracking_uri()
 
 # COMMAND ----------
-# Set the agent
-nest_asyncio.apply()
+mlflow.set_experiment('/Shared/tracing-demo')
 
-w = WorkspaceClient()
-host = w.config.host
+@mlflow.trace
+def my_func(x, y):
+    return x + y
 
-MANAGED_MCP_SERVER_URLS = [
-    f"{host}/api/2.0/mcp/genie/{cfg.genie_space_id}",
-    f"{host}/api/2.0/mcp/vector-search/{cfg.catalog}/{cfg.schema}",
-]
+# COMMAND ----------
+def my_func(x, y):
+    return x + y
 
-tools = asyncio.run(
-    create_mcp_tools(w=w, url_list=MANAGED_MCP_SERVER_URLS,)
+with mlflow.start_span("my_function") as span:
+    x = 1
+    y = 2
+    span.set_inputs({"x": x, "y": y})
+    result = my_func(x, y)
+    span.set_outputs({"output": result})
+
+
+# COMMAND ----------
+import random
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+session_id = f"s-{timestamp}-{random.randint(100000, 999999)}"
+request_id = f"req-{timestamp}-{random.randint(100000, 999999)}"
+
+git_sha = "abcd"
+
+@mlflow.trace
+def my_func(x, y):
+    mlflow.update_current_trace(
+    metadata={
+        "mlflow.trace.session": session_id,
+    },
+    tags={"model_serving_endpoint_name": "arxiv-agent-endpoint",
+          "model_version": 1,
+          "git_sha": git_sha},
+    client_request_id=request_id
 )
-
-agent = ArxivAgent(
-    llm_endpoint=cfg.llm_endpoint,
-    tools=tools,
-    system_prompt=cfg.system_prompt
-)
-mlflow.models.set_model(agent)
+    return x + y
 
 # COMMAND ----------
-# Test the agent
+# search traces
 
-test_request = {
-    "input": [
-        {"role": "user",
-         "content": "What are recent papers about LLMs and reasoning?"}
-    ]
-}
-
-result = agent.predict(test_request)
-print(result.model_dump(exclude_none=True))
-
-# COMMAND ----------
-# Run the agent with streaming
-for chunk in agent.predict_stream(test_request):
-    print(chunk.model_dump(exclude_none=True))
-
+mlflow.search_traces(filter_string=f"tags.git_sha = '{git_sha}'")

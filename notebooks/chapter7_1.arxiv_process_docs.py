@@ -112,7 +112,7 @@ for paper in papers:
 # COMMAND ----------
 
 if len(records) > 0:
-    schema = T.StructType(
+    metadata_schema = T.StructType(
         [
         T.StructField("paper_id", T.StringType(), False),
         T.StructField("title", T.StringType(), True),
@@ -129,7 +129,7 @@ if len(records) > 0:
 
     # create DataFrame
     metadata_df = spark.createDataFrame(
-        records, schema=schema).withColumn(
+        records, schema=metadata_schema).withColumn(
         "ingest_ts", F.current_timestamp()
     )
 

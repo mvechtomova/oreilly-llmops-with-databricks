@@ -97,13 +97,3 @@ class VectorSearchManager:
         index = self.create_or_get_index()
         logger.info(f"Syncing vector search index: {self.index_name}")
         index.sync()
-        logger.info(f"Vector search index synced successfully: {self.index_name}")
-
-    def get_index(self) -> Any:
-        """
-        Get the existing vector search index.
-
-        Returns:
-            Vector search index object
-        """
-        return self.client.get_index(index_name=self.index_name)

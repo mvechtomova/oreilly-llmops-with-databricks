@@ -2,6 +2,12 @@
 import mlflow
 from mlflow.genai.scorers import Guidelines
 
+from arxiv_curator.utils.common import set_mlflow_tracking_uri
+
+set_mlflow_tracking_uri()
+
+# COMMAND ----------
+
 # Example using Guidelines for escalation handling
 mlflow.set_experiment("/Shared/guidelines-example")
 escalation_guidelines = Guidelines(
@@ -10,7 +16,7 @@ escalation_guidelines = Guidelines(
         "When a user indicates previous attempts failed, the response must "
         "acknowledge their efforts and either escalate or offer a new approach"
     ],
-    model="databricks"
+    model="databricks:/databricks-gpt-oss-120b"
 )
 
 data = [
@@ -49,18 +55,43 @@ escalation_judge = make_judge(
         "4 - Acknowledges efforts and offers a reasonable new approach\n"
         "5 - Empathetic, escalates appropriately or provides creative solution"
     ),
-    model="databricks",
+    model="databricks:/databricks-gpt-oss-120b",
     feedback_value_type=int,
 )
 
 mlflow.genai.evaluate(data=data, scorers=[escalation_judge])
 
 # COMMAND ----------
+experiment_id = mlflow.search_experiments(
+    filter_string="name='/Shared/make-judge-example'")[0].experiment_id
 
-import mlflow
-from mlflow.genai.judges import make_judge
+from mlflow.genai.judges.optimizers import SIMBAAlignmentOptimizer
+
+# Retrieve traces with both judge and human assessments
+traces_for_alignment = mlflow.search_traces(
+    experiment_ids=[experiment_id],
+    return_type="list"
+)
+
+# Filter for traces with both judge and human feedback
+valid_traces = []
+for trace in traces_for_alignment:
+    feedbacks = trace.search_assessments(name="escalation_quality")
+    has_judge = any(f.source.source_type == "LLM_JUDGE" for f in feedbacks)
+    has_human = any(f.source.source_type == "HUMAN" for f in feedbacks)
+    if has_judge and has_human:
+        valid_traces.append(trace)
+
+optimizer = SIMBAAlignmentOptimizer(
+    model="databricks:/databricks-gpt-oss-120b"
+)
+
+# Align the judge based on human feedback
+aligned_judge = escalation_judge.align(optimizer, valid_traces)
+
+# COMMAND ----------
+
 from typing import Literal
-import time
 
 performance_judge = make_judge(
     name="performance_analyzer",
@@ -74,65 +105,5 @@ performance_judge = make_judge(
         "Rate as: 'optimal', 'acceptable', or 'needs_improvement'"
     ),
     feedback_value_type=Literal["optimal", "acceptable", "needs_improvement"],
-    model="databricks",
+    model="databricks:/databricks-gpt-oss-120b",
 )
-
-# COMMAND ----------
-
-# To see detailed optimization output during alignment, enable DEBUG logging:
-# import logging
-# logging.getLogger("mlflow.genai.judges.optimizers.simba").setLevel(logging.DEBUG)
-import asyncio
-
-import mlflow
-import nest_asyncio
-from databricks.sdk import WorkspaceClient
-
-from arxiv_curator.agent import ArxivAgent
-from arxiv_curator.mcp import create_mcp_tools
-from arxiv_curator.config import ProjectConfig
-
-
-cfg = ProjectConfig.from_yaml("../project_config.yml")
-
-# COMMAND ----------
-# Set the agent
-nest_asyncio.apply()
-
-w = WorkspaceClient()
-host = w.config.host
-
-MANAGED_MCP_SERVER_URLS = [
-    f"{host}/api/2.0/mcp/genie/{cfg.genie_space_id}",
-    f"{host}/api/2.0/mcp/vector-search/{cfg.catalog}/{cfg.schema}",
-]
-
-tools = asyncio.run(
-    create_mcp_tools(w=w, url_list=MANAGED_MCP_SERVER_URLS,)
-)
-
-agent = ArxivAgent(
-    llm_endpoint=cfg.llm_endpoint,
-    tools=tools,
-    system_prompt=cfg.system_prompt
-)
-mlflow.models.set_model(agent)
-
-# COMMAND ----------
-# Test the agent
-
-test_request = {
-    "input": [
-        {"role": "user",
-         "content": "What are recent papers about LLMs and reasoning?"}
-    ]
-}
-
-result = agent.predict(test_request)
-print(result.model_dump(exclude_none=True))
-
-# COMMAND ----------
-# Run the agent with streaming
-for chunk in agent.predict_stream(test_request):
-    print(chunk.model_dump(exclude_none=True))
-

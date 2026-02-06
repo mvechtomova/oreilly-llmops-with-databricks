@@ -34,9 +34,7 @@ async def create_mcp_tools(w: WorkspaceClient, url_list: list[str]) -> list[Tool
         mcp_client = DatabricksMCPClient(server_url=server_url, workspace_client=w)
         mcp_tools = mcp_client.list_tools()
         for mcp_tool in mcp_tools:
-            # Get the input schema and remove conversation_id if present
             input_schema = mcp_tool.inputSchema.copy() if mcp_tool.inputSchema else {}
-
             tool_spec = {
                 "type": "function",
                 "function": {

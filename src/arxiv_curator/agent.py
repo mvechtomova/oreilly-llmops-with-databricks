@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import warnings
@@ -8,6 +9,7 @@ from uuid import uuid4
 
 import backoff
 import mlflow
+import nest_asyncio
 import openai
 from databricks.sdk import WorkspaceClient
 from mlflow import MlflowClient
@@ -27,19 +29,38 @@ from mlflow.types.responses import (
 )
 
 from arxiv_curator.config import ProjectConfig
-from arxiv_curator.mcp import ToolInfo
+from arxiv_curator.mcp import create_mcp_tools
 
 
 class ArxivAgent(ResponsesAgent):
-    def __init__(self, llm_endpoint: str, tools: list[ToolInfo], system_prompt: str):
-        """Initializes the Arxiv Agent."""
+    def __init__(
+        self,
+        llm_endpoint: str,
+        system_prompt: str,
+        catalog: str,
+        schema: str,
+        genie_space_id: str | None = None,
+    ):
+        """Initializes the Arxiv Agent with config - creates tools internally."""
+        nest_asyncio.apply()
+
         self.system_prompt = system_prompt
         self.llm_endpoint = llm_endpoint
         self.workspace_client = WorkspaceClient()
         self.model_serving_client = (
             self.workspace_client.serving_endpoints.get_open_ai_client()
         )
+
+        # Create tools from config
+        host = self.workspace_client.config.host
+        urls = [f"{host}/api/2.0/mcp/vector-search/{catalog}/{schema}"]
+        if genie_space_id:
+            urls.append(f"{host}/api/2.0/mcp/genie/{genie_space_id}")
+
+        tools = asyncio.run(create_mcp_tools(w=self.workspace_client, url_list=urls))
         self._tools_dict = {tool.name: tool for tool in tools}
+
+        mlflow.set_experiment("/Shared/genai-arxiv-agent")
 
     def get_tool_specs(self) -> list[dict]:
         """Returns tool specifications in the format OpenAI expects."""
@@ -85,11 +106,22 @@ class ArxivAgent(ResponsesAgent):
             type="response.output_item.done", item=tool_call_output
         )
 
+    @mlflow.trace(span_type=SpanType.CHAIN)
     def call_and_run_tools(
         self,
         messages: list[dict[str, Any]],
         max_iter: int = 10,
+        trace_tags: dict | None = None,
+        trace_metadata: dict | None = None,
+        request_id: str | None = None,
     ) -> Generator[ResponsesAgentStreamEvent, None, None]:
+        if trace_tags or trace_metadata or request_id:
+            mlflow.update_current_trace(
+                tags=trace_tags or None,
+                metadata=trace_metadata or None,
+                client_request_id=request_id,
+            )
+
         for _ in range(max_iter):
             last_msg = messages[-1]
             if last_msg.get("role", None) == "assistant":
@@ -126,11 +158,11 @@ class ArxivAgent(ResponsesAgent):
         trace_metadata = {}
 
         # Add custom inputs (session_id, request_id) if provided
+        request_id = None
         if request.custom_inputs:
             if session_id := request.custom_inputs.get("session_id"):
                 trace_metadata["mlflow.trace.session"] = session_id
-            if request_id := request.custom_inputs.get("request_id"):
-                trace_tags["request_id"] = request_id
+            request_id = request.custom_inputs.get("request_id")
 
         # Add deployment metadata from environment variables
         if git_sha := os.getenv("GIT_SHA"):
@@ -140,17 +172,16 @@ class ArxivAgent(ResponsesAgent):
         if model_version := os.getenv("MODEL_VERSION"):
             trace_tags["model_version"] = model_version
 
-        if trace_tags or trace_metadata:
-            mlflow.update_current_trace(
-                tags=trace_tags or None,
-                metadata=trace_metadata or None
-            )
-
         messages = [{"role": "system", "content": self.system_prompt}] + [
             i.model_dump() for i in request.input
         ]
 
-        yield from self.call_and_run_tools(messages)
+        yield from self.call_and_run_tools(
+            messages,
+            trace_tags=trace_tags or None,
+            trace_metadata=trace_metadata or None,
+            request_id=request_id
+        )
 
 def log_register_agent(
     cfg: ProjectConfig,

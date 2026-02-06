@@ -1,31 +1,14 @@
-import argparse
-
 import yaml
 from loguru import logger
 from pyspark.sql import SparkSession
 
 from arxiv_curator.config import ProjectConfig
 from arxiv_curator.data_processor import DataProcessor
+from arxiv_curator.utils.common import create_parser
 from arxiv_curator.vector_search import VectorSearchManager
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--root_path",
-    action="store",
-    default=None,
-    type=str,
-    required=True,
-)
+args = create_parser()
 
-parser.add_argument(
-    "--env",
-    action="store",
-    default=None,
-    type=str,
-    required=True,
-)
-
-args = parser.parse_args()
 root_path = args.root_path
 config_path = f"{root_path}/files/project_config.yml"
 
@@ -36,13 +19,20 @@ logger.info(yaml.dump(project_config, default_flow_style=False))
 
 spark = SparkSession.builder.getOrCreate()
 
-
-# Initialize DataProcessor
+# Process data
 data_processor = DataProcessor(config=project_config, spark=spark)
-data_processor.process_and_save()
+records = data_processor.download_and_store_papers()
+
+if records is None:
+    logger.info("No new papers to process. Exiting.")
+    pass
+else:
+    data_processor.parse_pdfs_with_ai()
+    logger.info("Parseed documents.")
+
+    data_processor.process_chunks()
+    logger.info("Processing complete!")
 
 # Sync vector search index
-logger.info("Syncing vector search index...")
 vector_search_manager = VectorSearchManager(config=project_config)
 vector_search_manager.sync_index()
-logger.info("Vector search index sync complete!")

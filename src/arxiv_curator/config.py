@@ -12,6 +12,7 @@ class ProjectConfig(BaseModel):
     genie_space_id: str
     llm_endpoint: str
     system_prompt: str
+    warehouse_id: str
 
     @classmethod
     def from_yaml(cls: "ProjectConfig", config_path: str, env: str = "dev") -> "ProjectConfig":

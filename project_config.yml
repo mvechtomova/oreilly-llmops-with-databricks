@@ -24,6 +24,7 @@ dev:
   volume: arxiv_papers
   genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
   llm_endpoint: databricks-gpt-oss-120b
+  warehouse_id: 1883724c3376103a
 
 acc:
   catalog: mlops_acc
@@ -31,6 +32,7 @@ acc:
   volume: arxiv_papers
   genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
   llm_endpoint: databricks-gpt-oss-120b
+  warehouse_id: 1883724c3376103a
 
 prd:
   catalog: mlops_prd
@@ -38,3 +40,4 @@ prd:
   volume: arxiv_papers
   genie_space_id: 01f0e97a42981382b3d16f3f1899fdb5
   llm_endpoint: databricks-gpt-oss-120b
+  warehouse_id: 1883724c3376103a

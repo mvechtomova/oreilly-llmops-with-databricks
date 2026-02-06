@@ -15,9 +15,10 @@ client = OpenAI(
 
 # Send a random test question
 response = client.chat.completions.create(
-    model="databricks-gpt-5-1",
+    model="databricks-gpt-oss-120b",
     messages=[
-        {"role": "user", "content": "What is the capital of France?"}
+        {"role": "user",
+         "content": "What is MLOps?"}
     ]
 )
 

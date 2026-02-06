@@ -38,18 +38,17 @@ class DataProcessor:
             config: ProjectConfig object with table configurations
         """
         self.spark = spark
-        self.config = config
-        self.catalog_name = config.catalog_name
-        self.schema_name = config.schema_name
-        self.volume_name = config.volume_name
+        self.cfg = config
+        self.catalog = config.catalog
+        self.schema = config.schema
+        self.volume = config.volume
 
         self.end = time.strftime("%Y%m%d%H%M", time.gmtime())
-        self.pdf_dir = f"/Volumes/{self.catalog_name}/{self.schema_name}\
-            /{self.volume_name}/{self.end}"
+        self.pdf_dir = f"/Volumes/{self.catalog}/{self.schema}\
+            /{self.volume}/{self.end}"
         os.makedirs(self.pdf_dir, exist_ok=True)
-        self.arxiv_papers_table = config.get_full_table_name(
-            "arxiv_papers"
-        )
+        self.papers_table = f"{self.catalog}.{self.schema}.arxiv_papers"
+        self.parsed_table = f"{self.catalog}.{self.schema}.ai_parsed_docs_table"
 
     def _get_range_start(self) -> tuple[str, str]:
         """
@@ -61,10 +60,10 @@ class DataProcessor:
             start string in "YYYYMMDDHHMM" format
         """
 
-        if self.spark.catalog.tableExists(self.arxiv_papers_table):
+        if self.spark.catalog.tableExists(self.papers_table):
             result = self.spark.sql(f"""
                 SELECT max(processed)
-                FROM {self.arxiv_papers_table}
+                FROM {self.apapers_table}
             """).collect()
             start = str(result[0][0])
             logger.info(
@@ -161,9 +160,9 @@ class DataProcessor:
         )
 
         metadata_df.write.format("delta").mode("append").saveAsTable(
-            self.arxiv_papers_table)
+            self.papers_table)
         logger.info(
-            f"Saved {len(records)} paper records to {self.arxiv_papers_table}"
+            f"Saved {len(records)} paper records to {self.papers_table}"
         )
         return records
 
@@ -172,12 +171,9 @@ class DataProcessor:
         Parse PDFs using ai_parse_document and store in ai_parsed_docs table.
 
         """
-        ai_parsed_docs_table = self.config.get_full_table_name(
-            "ai_parsed_docs_table"
-        )
 
         self.spark.sql(f"""
-            CREATE TABLE IF NOT EXISTS {ai_parsed_docs_table} (
+            CREATE TABLE IF NOT EXISTS {self.parsed_table} (
                 path STRING,
                 parsed_content STRING,
                 processed LONG
@@ -185,7 +181,7 @@ class DataProcessor:
         """)
 
         self.spark.sql(f"""
-            INSERT INTO {ai_parsed_docs_table}
+            INSERT INTO {self.parsed_table}
             SELECT
                 path,
                 ai_parse_document(content) AS parsed_content,
@@ -197,7 +193,7 @@ class DataProcessor:
         """)
 
         logger.info(
-            f"Parsed PDFs from {self.pdf_dir} and saved to {ai_parsed_docs_table}"
+            f"Parsed PDFs from {self.pdf_dir} and saved to {self.parsed_table}"
         )
 
     @staticmethod
@@ -263,15 +259,12 @@ class DataProcessor:
         Process parsed documents to extract and clean chunks.
         Reads from ai_parsed_docs table and saves to arxiv_chunks table.
         """
-        ai_parsed_docs_table = self.config.get_full_table_name(
-            "ai_parsed_docs_table"
-        )
         logger.info(
             f"""Processing parsed documents from
-            {ai_parsed_docs_table} for end date {self.end}"""
+            {self.parsed_table} for end date {self.end}"""
         )
 
-        df = self.spark.table(ai_parsed_docs_table).where(
+        df = self.spark.table(self.parsed_table).where(
             f"processed = {self.end}"
         )
 
@@ -289,7 +282,7 @@ class DataProcessor:
         extract_paper_id_udf = udf(self._extract_paper_id, StringType())
         clean_chunk_udf = udf(self._clean_chunk, StringType())
 
-        metadata_df = self.spark.table(self.arxiv_papers_table).select(
+        metadata_df = self.spark.table(self.papers_table).select(
             col("paper_id"),
             col("title"),
             col("summary"),
@@ -318,9 +311,7 @@ class DataProcessor:
         )
 
         # Write to table
-        arxiv_chunks_table = self.config.get_full_table_name(
-            "arxiv_chunks_table"
-        )
+        arxiv_chunks_table = f"{self.catalog}.{self.schema}.arxiv_chunks_table"
         chunks_df.write.mode("append").saveAsTable(arxiv_chunks_table)
         logger.info(f"Saved chunks to {arxiv_chunks_table}")
 
