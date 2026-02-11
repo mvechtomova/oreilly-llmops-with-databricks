@@ -20,7 +20,6 @@ resources:
               env: ${bundle.target}
               git_sha: "${var.git_sha}"
               run_id: "{{job.run_id}}"
-              job_id: "{{job.id}}"
 
         - task_key: deploy_agent
           environment_key: default

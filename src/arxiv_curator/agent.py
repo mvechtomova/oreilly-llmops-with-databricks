@@ -190,7 +190,6 @@ def log_register_agent(
     cfg: ProjectConfig,
     git_sha: str,
     run_id: str,
-    job_id: str,
     agent_code_path: str,
     model_name: str,
     experiment_path: str = "/Shared/genai-arxiv-agent",
@@ -203,7 +202,6 @@ def log_register_agent(
         cfg: Project configuration containing catalog, schema, and other settings.
         git_sha: Git commit SHA for tracking.
         run_id: Run identifier for tracking.
-        job_id: Job identifier for tracking.
         model_name: Model path in Unity Catalog.
         agent_code_path: Path to the agent Python file.
         experiment_path: MLflow experiment path.

@@ -27,3 +27,6 @@ arxiv_papers/*
 .claude/settings.local.json
 .claude/mlflow/
 .claude/
+
+CLAUDE.md
+code_example.py

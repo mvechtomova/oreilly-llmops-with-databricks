@@ -27,7 +27,7 @@ serve_model(
     catalog_name=cfg.catalog,
     schema_name=cfg.schema,
     table_name_prefix="arxiv_agent_monitoring",
-    environment_vars={
+    env_vars={
         "GIT_SHA": git_sha,
         "MODEL_VERSION": model_version,
         "MODEL_SERVING_ENDPOINT_NAME": endpoint_name,

@@ -39,6 +39,7 @@ targets:
       root_path: /Shared/.bundle/${bundle.target}/${bundle.name}
     variables:
       schedule_pause_status: PAUSED
+      catalog: mlops_acc
 
   prd:
     workspace:
@@ -46,3 +47,4 @@ targets:
       root_path: /Shared/.bundle/${bundle.target}/${bundle.name}
     variables:
       schedule_pause_status: UNPAUSED
+      catalog: mlops_prd
