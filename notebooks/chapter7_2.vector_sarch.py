@@ -27,9 +27,6 @@ if not endpoint_exists:
 # COMMAND ----------
 vs_index_fullname = f"{catalog}.{schema}.arxiv_index"
 
-embedding_model_endpoint = "databricks-gte-large-en"
-
-
 
 vs_index_fullname = f"{catalog}.{schema}.arxiv_index"
 embedding_model_endpoint = "databricks-gte-large-en"

@@ -9,7 +9,6 @@ from arxiv_curator.utils.common import get_widget
 model_version = dbutils.jobs.taskValues.get(
     taskKey="log_register_agent",
     key="model_version",
-    debugValue="1"
 )
 git_sha = get_widget("git_sha", "local")
 env = get_widget("env", "dev")

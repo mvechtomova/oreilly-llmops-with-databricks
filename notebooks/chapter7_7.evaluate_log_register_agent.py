@@ -121,3 +121,13 @@ registered_model = mlflow.register_model(
     name=model_name,
     env_pack="databricks_model_serving"
 )
+
+# COMMAND ----------
+from mlflow import MlflowClient
+
+client = MlflowClient()
+client.set_registered_model_alias(
+    name=model_name,
+    alias="latest-model",
+    version=registered_model.version,
+)
