@@ -23,7 +23,7 @@ variables:
     default: PAUSED
 
 include:
-  - resources/*
+  - resources/*.yml
 
 targets:
   dev:

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import backoff
 import mlflow
+from loguru import logger
 import nest_asyncio
 import openai
 from databricks.sdk import WorkspaceClient
@@ -17,6 +18,8 @@ from mlflow.entities import SpanType
 from mlflow.models.resources import (
     DatabricksGenieSpace,
     DatabricksServingEndpoint,
+    DatabricksSQLWarehouse,
+    DatabricksTable,
     DatabricksVectorSearchIndex,
 )
 from mlflow.pyfunc import ResponsesAgent
@@ -41,7 +44,7 @@ class ArxivAgent(ResponsesAgent):
         schema: str,
         genie_space_id: str | None = None,
     ):
-        """Initializes the Arxiv Agent with config - creates tools internally."""
+        """Initializes the Arxiv Agent."""
         nest_asyncio.apply()
 
         self.system_prompt = system_prompt
@@ -53,11 +56,11 @@ class ArxivAgent(ResponsesAgent):
 
         # Create tools from config
         host = self.workspace_client.config.host
-        urls = [f"{host}/api/2.0/mcp/vector-search/{catalog}/{schema}"]
-        if genie_space_id:
-            urls.append(f"{host}/api/2.0/mcp/genie/{genie_space_id}")
+        urls = [f"{host}/api/2.0/mcp/vector-search/{catalog}/{schema}",
+                f"{host}/api/2.0/mcp/genie/{genie_space_id}"]
 
-        tools = asyncio.run(create_mcp_tools(w=self.workspace_client, url_list=urls))
+        tools = asyncio.run(
+            create_mcp_tools(w=self.workspace_client, url_list=urls))
         self._tools_dict = {tool.name: tool for tool in tools}
 
         mlflow.set_experiment("/Shared/genai-arxiv-agent")
@@ -191,6 +194,7 @@ def log_register_agent(
     agent_code_path: str,
     model_name: str,
     experiment_path: str = "/Shared/genai-arxiv-agent",
+    evaluation_metrics: dict | None = None,
 ) -> mlflow.entities.model_registry.RegisteredModel:
     """
     Log and register an MLflow agent model to Unity Catalog.
@@ -203,11 +207,11 @@ def log_register_agent(
         model_name: Model path in Unity Catalog.
         agent_code_path: Path to the agent Python file.
         experiment_path: MLflow experiment path.
+        evaluation_metrics: Optional evaluation metrics to log.
 
     Returns:
         RegisteredModel object from Unity Catalog.
     """
-
 
     resources = [
         DatabricksServingEndpoint(endpoint_name=cfg.llm_endpoint),
@@ -215,6 +219,9 @@ def log_register_agent(
         DatabricksVectorSearchIndex(
             index_name=f"{cfg.catalog}.{cfg.schema}.arxiv_index"
         ),
+        DatabricksTable(table_name=f"{cfg.catalog}.{cfg.schema}.arxiv_papers"),
+        DatabricksSQLWarehouse(warehouse_id=cfg.warehouse_id),
+        DatabricksServingEndpoint(endpoint_name="databricks-bge-large-en"),
     ]
 
     model_config = {
@@ -246,23 +253,22 @@ def log_register_agent(
             input_example=test_request,
             model_config=model_config,
         )
+        if evaluation_metrics:
+            mlflow.log_metrics(evaluation_metrics)
 
+    logger.info(f"Registering model: {model_name}")
     registered_model = mlflow.register_model(
         model_uri=model_info.model_uri,
         name=model_name,
         env_pack="databricks_model_serving"
     )
+    logger.info(f"Registered version: {registered_model.version}")
 
     client = MlflowClient()
+    logger.info("Setting alias 'latest-model'")
     client.set_registered_model_alias(
         name=model_name,
         alias="latest-model",
         version=registered_model.version,
     )
-
-    client.update_registered_model(
-        model_name=model_name,
-        deployment_job_id=job_id
-    )
-
     return registered_model

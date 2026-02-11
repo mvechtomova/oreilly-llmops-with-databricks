@@ -1,13 +1,4 @@
 # Databricks notebook source
-# MAGIC %pip install arxiv
-
-# COMMAND ----------
-
-# MAGIC %restart_python
-
-# COMMAND ----------
-
-
 
 from loguru import logger
 from pyspark.sql import SparkSession

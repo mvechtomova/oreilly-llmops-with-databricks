@@ -18,11 +18,7 @@ resources:
       tasks:
         - task_key: preprocessing
           environment_key: default
-          spark_python_task:
-            python_file: ../scripts/process_data.py
-            parameters:
-              - "common"
-              - "--root_path"
-              - ${workspace.root_path}
-              - "--env"
-              - ${bundle.target}
+          notebook_task:
+            notebook_path: deployment_notebooks/process_data.py
+            base_parameters:
+              env: ${bundle.target}

@@ -1,22 +1,21 @@
+# Databricks notebook source
 import yaml
+
 from loguru import logger
 from pyspark.sql import SparkSession
 
 from arxiv_curator.config import ProjectConfig
 from arxiv_curator.data_processor import DataProcessor
-from arxiv_curator.utils.common import create_parser
+from arxiv_curator.utils.common import get_widget
 from arxiv_curator.vector_search import VectorSearchManager
 
-args = create_parser()
+env = get_widget("env", "dev")
 
-root_path = args.root_path
-config_path = f"{root_path}/files/project_config.yml"
-
-project_config = ProjectConfig.from_yaml(config_path=config_path, env=args.env)
-
+project_config = ProjectConfig.from_yaml("../../project_config.yml", env=env)
 logger.info("Configuration loaded:")
 logger.info(yaml.dump(project_config, default_flow_style=False))
 
+# COMMAND ----------
 spark = SparkSession.builder.getOrCreate()
 
 # Process data

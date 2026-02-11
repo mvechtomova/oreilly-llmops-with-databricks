@@ -1,7 +1,7 @@
 resources:
   jobs:
-    register_agent:
-      name: arxiv-agent-register-pipeline
+    register_deploy_agent:
+      name: arxiv-agent-register-deploy-pipeline
       tags:
         project_name: "arxiv-curator"
       environments:
@@ -14,79 +14,20 @@ resources:
       tasks:
         - task_key: log_register_agent
           environment_key: default
-          spark_python_task:
-            python_file: ../scripts/log_register_agent.py
-            parameters:
-              - "--root_path"
-              - ${workspace.root_path}
-              - "--env"
-              - ${bundle.target}
-              - "--git_sha"
-              - "${var.git_sha}"
-              - "--run_id"
-              - "{{job.run_id}}"
-              - "--job_id"
-              - "${resources.jobs.deploy_agent.id}"
+          notebook_task:
+            notebook_path: deployment_notebooks/log_register_agent.py
+            base_parameters:
+              env: ${bundle.target}
+              git_sha: "${var.git_sha}"
+              run_id: "{{job.run_id}}"
+              job_id: "{{job.id}}"
 
-    deploy_agent:
-      name: arxiv-agent-deploy-pipeline
-      tags:
-        project_name: "arxiv-curator"
-      environments:
-        - environment_key: default
-          spec:
-            environment_version: "4"
-            dependencies:
-              - ../dist/*.whl
-
-      tasks:
-        - task_key: evaluate_agent
-          environment_key: default
-          spark_python_task:
-            python_file: ../scripts/evaluate.py
-            parameters:
-              - "--root_path"
-              - ${workspace.root_path}
-              - "--env"
-              - ${bundle.target}
-        - task_key: agent_evaluation_passed
-          condition_task:
-            op: "EQUAL_TO"
-            left: "{{tasks.evaluate_agent.values.passed}}"
-            right: "1"
-          depends_on:
-            - task_key: "evaluate_agent"
-        - task_key: "approve_check"
+        - task_key: deploy_agent
           environment_key: default
           depends_on:
-            - task_key: "agent_evaluation_passed"
-              outcome: "true"
-          spark_python_task:
-            python_file: "../scripts/approve.py"
-            parameters:
-              - "--approve_check"
-              - "--task_name"
-              - "{{task.name}}"
-              - "--root_path"
-              - "${workspace.root_path}"
-              - "--env"
-              - "${bundle.target}"
-
-        - task_key: "deploy_agent"
-          environment_key: default
-          depends_on:
-            - task_key: "approve_check"
-          spark_python_task:
-            python_file: "../scripts/deploy_agent.py"
-            parameters:
-              - "--train_deploy_model"
-              - "--root_path"
-              - "${workspace.root_path}"
-              - "--env"
-              - "${bundle.target}"
-              - "--branch"
-              - "${var.branch}"
-              - "--git_sha"
-              - "${var.git_sha}"
-              - "--run_id"
-              - "{{job.run_id}}"
+            - task_key: log_register_agent
+          notebook_task:
+            notebook_path: deployment_notebooks/deploy_agent.py
+            base_parameters:
+              env: ${bundle.target}
+              git_sha: "${var.git_sha}"
